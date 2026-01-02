@@ -10,8 +10,16 @@
         /* INPUT DEO */
         .input-box { background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }
         textarea { width: 100%; height: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: monospace; }
-        .btn-main { background: #2563eb; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; margin-top: 5px; font-weight: bold; font-size: 14px; }
+        
+        /* Dugmici u headeru */
+        .btn-container { margin-top: 5px; display: flex; gap: 10px; }
+        
+        .btn-main { background: #2563eb; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-main:hover { background: #1d4ed8; }
+
+        /* Narandžasto dugme za vraćanje nazad */
+        .btn-reset { background: #f97316; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-reset:hover { background: #ea580c; }
 
         /* TABLA */
         .board { display: flex; gap: 6px; overflow-x: auto; min-height: 85vh; align-items: flex-start; padding-bottom: 10px; }
@@ -64,7 +72,10 @@
 <div class="input-box">
     <h3>1. Nalepi podatke ovde:</h3>
     <textarea id="rawInput" placeholder="Nalepi onaj tekst sa crticama..."></textarea>
-    <button class="btn-main" onclick="processData()">NAPRAVI KARTICE</button>
+    <div class="btn-container">
+        <button class="btn-main" onclick="processData()">NAPRAVI KARTICE</button>
+        <button class="btn-reset" onclick="resetPositions()">VRATI SVE NAZAD</button>
+    </div>
 </div>
 
 <div class="board" id="board"></div>
@@ -171,6 +182,18 @@
             });
         });
 
+        render();
+    }
+
+    // AŽURIRANA FUNKCIJA - Bez Confirm prozora
+    function resetPositions() {
+        if(drivers.length === 0) {
+            alert("Nema kartica! Prvo klikni 'NAPRAVI KARTICE'.");
+            return;
+        }
+        
+        // Odmah vraća sve u neraspoređeno
+        drivers.forEach(d => d.col = 'unassigned');
         render();
     }
 
