@@ -12,7 +12,7 @@
         textarea { width: 100%; height: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: monospace; }
         
         /* Dugmici u headeru */
-        .btn-container { margin-top: 5px; display: flex; gap: 10px; }
+        .btn-container { margin-top: 5px; display: flex; gap: 10px; align-items: center; }
         
         .btn-main { background: #2563eb; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-main:hover { background: #1d4ed8; }
@@ -20,6 +20,17 @@
         /* Narandžasto dugme za vraćanje nazad */
         .btn-reset { background: #f97316; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-reset:hover { background: #ea580c; }
+
+        /* VALIDACIJA KUTIJA */
+        #validation-box { 
+            margin-top: 10px; 
+            padding: 10px; 
+            border-radius: 6px; 
+            font-weight: bold; 
+            display: none; 
+            font-size: 0.95em;
+            border: 1px solid transparent;
+        }
 
         /* TABLA */
         .board { display: flex; gap: 6px; overflow-x: auto; min-height: 85vh; align-items: flex-start; padding-bottom: 10px; }
@@ -76,6 +87,8 @@
         <button class="btn-main" onclick="processData()">NAPRAVI KARTICE</button>
         <button class="btn-reset" onclick="resetPositions()">VRATI SVE NAZAD</button>
     </div>
+    <!-- KUTIJA ZA VALIDACIJU -->
+    <div id="validation-box"></div>
 </div>
 
 <div class="board" id="board"></div>
@@ -89,6 +102,18 @@
         { id: 'petak', label: 'Petak' },
         { id: 'ponedeljak', label: 'Ponedeljak' }
     ];
+
+    // Funkcija za dobijanje dana u nedelji
+    function getDayName(dateString) {
+        const days = ['NEDELJA', 'PONEDELJAK', 'UTORAK', 'SREDA', 'ČETVRTAK', 'PETAK', 'SUBOTA'];
+        let d = new Date(dateString);
+        if(isNaN(d.getTime())) return "";
+        return days[d.getDay()];
+    }
+
+    function formatMoney(amount) {
+        return '$' + amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
 
     function processData() {
         const text = document.getElementById('rawInput').value;
@@ -104,7 +129,7 @@
             let accountRaw = "";
             let amount = "0.00";
             let note = "";
-            let isPaid = block.includes("PLACENO");
+            let paidStatus = ""; 
             
             const lines = block.trim().split('\n').map(l => l.trim()).filter(l => l !== "");
             if(lines.length === 0) return;
@@ -114,6 +139,22 @@
             // --- PARSIRANJE ---
             lines.forEach(line => {
                 const lower = line.toLowerCase();
+                
+                // Provera za PLAĆENO i izvlačenje datuma
+                if (lower.includes("placeno") || lower.includes("plaćeno")) {
+                    let dateMatch = line.match(/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/);
+                    if (dateMatch) {
+                        let dateStr = dateMatch[0];
+                        let dayName = getDayName(dateStr);
+                        if (dayName) {
+                            paidStatus = `VEĆ PLAĆENO - ${dayName} (${dateStr})`;
+                        } else {
+                            paidStatus = `VEĆ PLAĆENO ${dateStr}`;
+                        }
+                    } else {
+                        paidStatus = "VEĆ PLAĆENO";
+                    }
+                }
                 
                 if (lower.startsWith('truck')) {
                     hasKeywords = true;
@@ -141,12 +182,11 @@
             // --- ODLUČIVANJE O IMENU ---
             let finalName = ownerRaw;
 
-            // Ako imamo oba, uporedi ih
             if (accountRaw && ownerRaw !== "Nepoznat") {
                 if (areNamesSimilar(accountRaw, ownerRaw)) {
-                    finalName = ownerRaw; // Slični su, koristi Vlasnika
+                    finalName = ownerRaw;
                 } else {
-                    finalName = accountRaw; // Različiti su, koristi Account
+                    finalName = accountRaw;
                 }
             } else if (ownerRaw === "Nepoznat" && accountRaw) {
                 finalName = accountRaw;
@@ -164,7 +204,6 @@
                 }
             }
 
-            // Ako nema broja kamiona, koristi ime
             if (!truck && finalName !== "Nepoznat") {
                 truck = finalName; 
             }
@@ -177,27 +216,71 @@
                 owner: finalName, 
                 amount: amount,
                 note: note,
-                isPaid: isPaid,
+                paidStatus: paidStatus,
                 col: 'unassigned'
             });
         });
 
+        // --- VALIDACIJA TOTALA ---
+        checkTotal(text);
+
         render();
     }
 
-    // AŽURIRANA FUNKCIJA - Bez Confirm prozora
+    function checkTotal(rawText) {
+        // 1. Izračunaj zbir svih kartica
+        let calculatedSum = drivers.reduce((sum, d) => {
+            let clean = d.amount.replace(/[^0-9.-]+/g,"");
+            return sum + (parseFloat(clean) || 0);
+        }, 0);
+
+        // 2. Pokušaj da nađeš TOTAL u tekstu
+        let inputTotal = 0;
+        let foundTotal = false;
+        
+        // Regex traži "TOTAL:" praćen dolarom i brojem
+        const totalMatch = rawText.match(/TOTAL:?\s*\$([\d,]+\.?\d*)/i);
+        
+        if (totalMatch) {
+            inputTotal = parseFloat(totalMatch[1].replace(/,/g, ''));
+            foundTotal = true;
+        }
+
+        const valBox = document.getElementById('validation-box');
+        valBox.style.display = 'block';
+
+        if (!foundTotal) {
+            valBox.style.background = '#e0f2fe';
+            valBox.style.color = '#0369a1';
+            valBox.style.border = '1px solid #bae6fd';
+            valBox.innerHTML = `ℹ️ Ukupan zbir kartica: ${formatMoney(calculatedSum)} (Nisam našao 'TOTAL:' u tekstu za poređenje)`;
+            return;
+        }
+
+        const diff = Math.abs(inputTotal - calculatedSum);
+        
+        if (diff < 0.05) { // Tolerancija za sitne decimale
+            valBox.style.background = '#dcfce7';
+            valBox.style.color = '#15803d';
+            valBox.style.border = '1px solid #86efac';
+            valBox.innerHTML = `✅ SAVRŠENO! Tvoj tekst kaže ${formatMoney(inputTotal)}, a kartice kažu ${formatMoney(calculatedSum)}. Sve se slaže!`;
+        } else {
+            valBox.style.background = '#fee2e2';
+            valBox.style.color = '#b91c1c';
+            valBox.style.border = '1px solid #fca5a5';
+            valBox.innerHTML = `⚠️ UPOZORENJE! Tvoj tekst kaže <b>${formatMoney(inputTotal)}</b>, a kartice kažu <b>${formatMoney(calculatedSum)}</b>.<br>Razlika je: <b>${formatMoney(diff)}</b>. Proveri da li neko fali!`;
+        }
+    }
+
     function resetPositions() {
         if(drivers.length === 0) {
             alert("Nema kartica! Prvo klikni 'NAPRAVI KARTICE'.");
             return;
         }
-        
-        // Odmah vraća sve u neraspoređeno
         drivers.forEach(d => d.col = 'unassigned');
         render();
     }
 
-    // Funkcija za proveru sličnosti imena
     function areNamesSimilar(name1, name2) {
         if(!name1 || !name2) return false;
         const s1 = name1.toLowerCase();
@@ -243,14 +326,13 @@
 
             colDrivers.forEach(drv => {
                 const card = document.createElement('div');
-                card.className = `card ${drv.isPaid ? 'paid' : ''}`;
+                card.className = `card ${drv.paidStatus ? 'paid' : ''}`;
                 
                 let displayId = drv.truck;
                 if (/^\d+$/.test(displayId) || (displayId.length < 6 && /\d/.test(displayId))) {
                     displayId = '#' + displayId;
                 }
 
-                // Generisanje dugmića - UVEK SVI DUGMIĆI
                 let actionsHtml = `
                     <div class="move-btn to-sre ${col.id==='sreda'?'active-day':''}" onclick="move('${drv.id}', 'sreda')">Sre</div>
                     <div class="move-btn to-cet ${col.id==='cetvrtak'?'active-day':''}" onclick="move('${drv.id}', 'cetvrtak')">Čet</div>
@@ -266,7 +348,7 @@
                     </div>
                     <span class="owner">${drv.owner}</span>
                     ${drv.note ? `<span class="note">${drv.note}</span>` : ''}
-                    ${drv.isPaid ? `<span class="note" style="color:green;font-weight:bold">VEĆ PLAĆENO</span>` : ''}
+                    ${drv.paidStatus ? `<span class="note" style="color:green;font-weight:bold">${drv.paidStatus}</span>` : ''}
                     <div class="actions">${actionsHtml}</div>
                 `;
                 colDiv.appendChild(card);
